@@ -271,9 +271,9 @@ const App = () => {
           <p style={{ color: "#fff" }}>Minting, please wait.</p>
         </div>
 
-        <div className="collection">
-          {tokenIds &&
-            tokenIds.map((tokenId) => {
+        {tokenIds && (
+          <div className="collection">
+            {tokenIds.map((tokenId) => {
               return (
                 <button
                   onClick={() => viewOnOpenSea(tokenId.id)}
@@ -283,7 +283,8 @@ const App = () => {
                 </button>
               );
             })}
-        </div>
+          </div>
+        )}
 
         <div className="footer-container">
           <img alt="Twitter Logo" className="twitter-logo" src={twitterLogo} />
