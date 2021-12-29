@@ -9,14 +9,45 @@ import Loader from "react-loader-spinner";
 // Constants
 const TWITTER_HANDLE = "AtakpuGodson";
 const TWITTER_LINK = `https://twitter.com/${TWITTER_HANDLE}`;
-const OPENSEA_LINK = "";
 const TOTAL_MINT_COUNT = 50;
-const CONTRACT_ADDRESS = "0x7A6D81C0884ba41C878296128892F122d811de4e";
+const CONTRACT_ADDRESS = "0xaEC9E80280415655c60116321Bd5B380B338eb5a";
 
 const App = () => {
   const [currentAccount, setCurrentAccount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [contract, setContract] = useState("");
+  const [tokenIds, setTokenIds] = useState("");
+
+  useEffect(() => {
+    checkIfWalletIsConnected();
+    checkIfOnCorrectNetwork();
+  });
+
+  useEffect(() => {
+    initContract();
+  }, [currentAccount]);
+  useEffect(() => {
+    fetchNftList();
+  }, [contract]);
   // Render Methods
+
+  const initContract = async () => {
+    try {
+      if (currentAccount) {
+        const { ethereum } = window;
+        const provider = new ethers.providers.Web3Provider(ethereum);
+        const signer = provider.getSigner();
+        const connectedContract = new ethers.Contract(
+          CONTRACT_ADDRESS,
+          myEpicNft.abi,
+          signer
+        );
+        setContract(connectedContract);
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
 
   const checkIfWalletIsConnected = async () => {
     /*
@@ -25,7 +56,7 @@ const App = () => {
     const { ethereum } = window;
 
     if (!ethereum) {
-      console.log("Make sure you have metamask!");
+      alert("Make sure you have metamask!");
       return;
     } else {
       console.log("We have the ethereum object", ethereum);
@@ -77,9 +108,6 @@ const App = () => {
        */
       console.log("Connected", accounts[0]);
       setCurrentAccount(accounts[0]);
-      // Setup listener! This is for the case where a user comes to our site
-      // and connected their wallet for the first time.
-      setupEventListener();
     } catch (error) {
       console.log(error);
     }
@@ -91,22 +119,14 @@ const App = () => {
       const { ethereum } = window;
 
       if (ethereum) {
-        const provider = new ethers.providers.Web3Provider(ethereum);
-        const signer = provider.getSigner();
-        const connectedContract = new ethers.Contract(
-          CONTRACT_ADDRESS,
-          myEpicNft.abi,
-          signer
-        );
-
-        let totalMinted = await connectedContract.getTotalNFTsMintedSoFar();
+        let totalMinted = await contract.getTotalNFTsMintedSoFar();
         console.log("Total Minted", totalMinted);
         if (totalMinted > TOTAL_MINT_COUNT) {
           alert("You have already minted the maximum number of NFTs!");
           return;
         }
         console.log("Going to pop wallet now to pay gas...");
-        let nftTxn = await connectedContract.makeAnEpicNFT();
+        let nftTxn = await contract.makeAnEpicNFT();
 
         console.log("Mining...please wait.");
         setIsLoading(true);
@@ -115,6 +135,7 @@ const App = () => {
         console.log(
           `Mined, see transaction: https://rinkeby.etherscan.io/tx/${nftTxn.hash}`
         );
+        fetchNftList();
       } else {
         console.log("Ethereum object doesn't exist!");
       }
@@ -130,19 +151,7 @@ const App = () => {
       const { ethereum } = window;
 
       if (ethereum) {
-        // Same stuff again
-        const provider = new ethers.providers.Web3Provider(ethereum);
-        const signer = provider.getSigner();
-        const connectedContract = new ethers.Contract(
-          CONTRACT_ADDRESS,
-          myEpicNft.abi,
-          signer
-        );
-
-        // THIS IS THE MAGIC SAUCE.
-        // This will essentially "capture" our event when our contract throws it.
-        // If you're familiar with webhooks, it's very similar to that!
-        connectedContract.on("NewEpicNFTMinted", (from, tokenId) => {
+        contract.on("NewEpicNFTMinted", (from, tokenId) => {
           console.log(from, tokenId.toNumber());
           setIsLoading(false);
           alert(
@@ -150,7 +159,7 @@ const App = () => {
           );
         });
 
-        connectedContract.on("MintError", (from, message) => {
+        contract.on("MintError", (from, message) => {
           console.log(from, message);
           setIsLoading(false);
           alert(`${message}`);
@@ -185,6 +194,32 @@ const App = () => {
     }
   };
 
+  const fetchNftList = async () => {
+    try {
+      if (contract) {
+        let ownerIds = await contract.getUserTokenIds();
+        let idArray = [];
+        ownerIds &&
+          ownerIds.map((data) => {
+            console.log(data.name);
+            return idArray.push({
+              name: data.name.toString(),
+              id: data.tokenId.toNumber(),
+            });
+          });
+        setTokenIds(idArray);
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const viewOnOpenSea = (tokenId) => {
+    window.open(
+      ` https://testnets.opensea.io/assets/${CONTRACT_ADDRESS}/${tokenId}`
+    );
+  };
+
   // Render Methods
   const renderNotConnectedContainer = () => (
     <button
@@ -198,10 +233,6 @@ const App = () => {
   /*
    * This runs our function when the page loads.
    */
-  useEffect(() => {
-    checkIfWalletIsConnected();
-    checkIfOnCorrectNetwork();
-  }, []);
 
   return (
     <div className="App">
@@ -239,6 +270,21 @@ const App = () => {
           />
           <p style={{ color: "#fff" }}>Minting, please wait.</p>
         </div>
+
+        <div className="collection">
+          {tokenIds &&
+            tokenIds.map((tokenId) => {
+              return (
+                <button
+                  onClick={() => viewOnOpenSea(tokenId.id)}
+                  className="collectionItem connect-wallet-button"
+                >
+                  {tokenId.name}
+                </button>
+              );
+            })}
+        </div>
+
         <div className="footer-container">
           <img alt="Twitter Logo" className="twitter-logo" src={twitterLogo} />
           <a
